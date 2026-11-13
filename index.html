@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image to QR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  :root { --bg:#fff; --fg:#111; --muted:#666; --card:#f3f4f6; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; --card:#1d1d20; --accent:#60a5fa; } }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .card { background:var(--card); border-radius:12px; padding:16px; margin-top:16px; }
+  label { display:block; margin:8px 0 4px; font-size:.9rem; }
+  input[type=file], select { width:100%; font-size:1rem; }
+  button { margin-top:12px; padding:10px 16px; font-size:1rem; border:0; border-radius:8px; background:var(--accent); color:#fff; }
+  #out { text-align:center; }
+  #out img { max-width:100%; image-rendering:pixelated; background:#fff; }
+  #viewer { display:none; position:fixed; inset:0; background:#111; align-items:center; justify-content:center; }
+  #viewer img { max-width:100vw; max-height:100vh; }
+</style>
+</head>
+<body>
+<main id="gen">
+  <h1>Image to QR</h1>
+  <p class="muted">Everything happens in your browser. Your image is never uploaded; it lives inside the QR code.</p>
+  <div class="card">
+    <label for="file">Choose image</label>
+    <input id="file" type="file" accept="image/*">
+    <label for="target">QR density</label>
+    <select id="target">
+      <option value="1100">Easy to scan (smaller image)</option>
+      <option value="1800" selected>Balanced</option>
+      <option value="2900">Max detail (dense QR)</option>
+    </select>
+    <button id="go">Make QR</button>
+  </div>
+  <div class="card" id="out" hidden>
+    <img id="qrimg" alt="QR code">
+    <p class="muted" id="info"></p>
+    <button id="dl">Download PNG</button>
+  </div>
+  <p class="muted">Scan with the normal phone camera and tap the link.</p>
+</main>
+<div id="viewer"><img id="vimg" alt=""></div>
+
+<script>
+(function () {
+  // ---- Viewer mode: link looks like  page#jpeg;<base64> ----
+  var h = location.hash.slice(1), i = h.indexOf(";"), fmt = h.slice(0, i);
+  if (i > 0 && /^(webp|jpeg|png)$/.test(fmt)) {
+    document.getElementById("gen").style.display = "none";
+    var v = document.getElementById("viewer");
+    v.style.display = "flex";
+    document.getElementById("vimg").src = "data:image/" + fmt + ";base64," + h.slice(i + 1);
+    return;
+  }
+
+  // ---- Generator mode ----
+  var $ = function (id) { return document.getElementById(id); };
+  var base = location.origin + location.pathname;
+  var lastURL = null;
+
+  function makeQR(text) {
+    var qr = qrcode(0, "L");
+    qr.addData(text, "Byte");
+    qr.make();               // throws if too long
+    return qr;
+  }
+
+  function loadImage(file) {
+    return new Promise(function (res, rej) {
+      var img = new Image();
+      img.onload = function () { res(img); };
+      img.onerror = function () { rej(new Error("Cannot read image")); };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function fit(img, limit) {
+    var c = document.createElement("canvas"), ctx = c.getContext("2d");
+    var qs = [0.7, 0.5, 0.35, 0.25, 0.15];
+    for (var side = 256; side >= 16; side -= 8) {
+      var s = Math.min(1, side / Math.max(img.width, img.height));
+      c.width = Math.max(1, Math.round(img.width * s));
+      c.height = Math.max(1, Math.round(img.height * s));
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      for (var k = 0; k < qs.length; k++) {
+        var data = c.toDataURL("image/jpeg", qs[k]).split(",")[1];
+        var payload = base + "#jpeg;" + data;
+        if (payload.length <= limit) {
+          try { return { qr: makeQR(payload), w: c.width, h: c.height, len: payload.length }; }
+          catch (e) { /* too big for QR, keep shrinking */ }
+        }
+      }
+    }
+    return null;
+  }
+
+  $("go").onclick = function () {
+    var f = $("file").files[0];
+    if (!f) { alert("Choose an image first."); return; }
+    loadImage(f).then(function (img) {
+      var r = fit(img, parseInt($("target").value, 10));
+      if (!r) { alert("Image cannot fit in a QR code."); return; }
+      lastURL = r.qr.createDataURL(8, 4);
+      $("qrimg").src = lastURL;
+      $("info").textContent = r.w + "x" + r.h + " px image, " + r.len + " bytes, QR version " + r.qr.getModuleCount();
+      $("out").hidden = false;
+    }).catch(function (e) { alert(e.message); });
+  };
+
+  $("dl").onclick = function () {
+    if (!lastURL) return;
+    var a = document.createElement("a");
+    a.href = lastURL; a.download = "qr.png"; a.click();
+  };
+})();
+</script>
+</body>
+</html>
