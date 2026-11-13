@@ -4,7 +4,7 @@
 Modes:
   default       QR holds a data: URI (many phones will NOT open it).
   --viewer-url  QR holds https://<viewer>#<fmt>;<base64>. Any phone camera
-                opens the link; the static viewer.html shows the image.
+                opens the link; the hosted index.html shows the image.
                 The part after '#' is never sent to a server.
 
 A QR code holds at most 2953 bytes (version 40, level L), so the image is
@@ -52,7 +52,7 @@ def main():
     p.add_argument("-o", "--output", default="qr.png")
     p.add_argument("-f", "--format", choices=["webp", "jpeg"], default="jpeg")
     p.add_argument("--viewer-url",
-                   help="public URL of viewer.html, e.g. https://you.github.io/viewer.html")
+                   help="public URL of the hosted site, e.g. https://you.github.io/REPO/")
     p.add_argument("--limit", type=int, default=QR_MAX_BYTES - 20,
                    help="max payload length in bytes")
     a = p.parse_args()

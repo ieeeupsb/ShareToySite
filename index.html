@@ -6,62 +6,206 @@
 <title>Image to QR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
-  :root { --bg:#fff; --fg:#111; --muted:#666; --card:#f3f4f6; --accent:#2563eb; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; --card:#1d1d20; --accent:#60a5fa; } }
-  html, body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; }
-  main { max-width:520px; margin:0 auto; padding:24px 16px; }
-  h1 { font-size:1.4rem; margin:0 0 4px; }
-  .muted { color:var(--muted); font-size:.9rem; }
-  .card { background:var(--card); border-radius:12px; padding:16px; margin-top:16px; }
-  label { display:block; margin:8px 0 4px; font-size:.9rem; }
-  input[type=file], select { width:100%; font-size:1rem; }
-  button { margin-top:12px; padding:10px 16px; font-size:1rem; border:0; border-radius:8px; background:var(--accent); color:#fff; }
-  #out { text-align:center; }
-  #out img { max-width:100%; image-rendering:pixelated; background:#fff; }
-  #viewer { display:none; position:fixed; inset:0; background:#111; align-items:center; justify-content:center; }
-  #viewer img { max-width:100vw; max-height:100vh; }
+  :root {
+    --paper: #f6f3ec;
+    --ink: #1b1b18;
+    --muted: #6b675b;
+    --rule: #d9d4c5;
+    --accent: #b4441f;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17160f;
+      --ink: #ece8da;
+      --muted: #a39e8d;
+      --rule: #3a382d;
+      --accent: #e48a63;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 40px 20px 64px; }
+
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 20px; margin-bottom: 28px; }
+  h1 { font: 400 2rem/1.15 var(--serif); margin: 0 0 8px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 52ch; }
+
+  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 36px; align-items: start; }
+  @media (max-width: 720px) { .layout { grid-template-columns: 1fr; gap: 28px; } }
+  .layout > section { min-width: 0; }
+
+  h2 { font: 600 .72rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+
+  #drop {
+    display: block; border: 1px dashed var(--muted); padding: 22px 14px; text-align: center;
+    cursor: pointer; color: var(--muted); font-size: .95rem; overflow-wrap: anywhere;
+  }
+  #drop.over { border-color: var(--accent); color: var(--ink); }
+  #drop strong { color: var(--ink); font-weight: 600; }
+  #file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  #file:focus-visible + #drop { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  fieldset { border: 0; padding: 0; margin: 24px 0 0; min-width: 0; }
+  fieldset label { display: block; padding: 8px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+  fieldset label:first-of-type { border-top: 1px solid var(--rule); }
+  fieldset small { display: block; color: var(--muted); margin-left: 24px; font-size: .85rem; }
+  input[type=radio] { accent-color: var(--accent); margin-right: 8px; }
+
+  button {
+    font: inherit; font-weight: 600; margin-top: 20px; padding: 10px 18px;
+    background: var(--ink); color: var(--paper); border: 0; border-radius: 2px; cursor: pointer;
+  }
+  button:hover { background: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.plain { background: none; color: var(--ink); border: 1px solid var(--ink); margin: 0 8px 0 0; }
+  button.plain:hover { background: var(--ink); color: var(--paper); }
+
+  #msg { margin: 0 0 16px; padding: 8px 0 8px 12px; border-left: 3px solid var(--accent); color: var(--ink); max-width: 60ch; }
+
+  .empty { color: var(--muted); border-left: 2px solid var(--rule); padding: 4px 0 4px 16px; max-width: 44ch; }
+  .empty ol { margin: 8px 0 0; padding-left: 18px; }
+
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  figure { margin: 0; }
+  figure .frame { border: 1px solid var(--rule); background: repeating-conic-gradient(#0000000d 0 25%, transparent 0 50%) 0 0/16px 16px; display: flex; align-items: center; justify-content: center; aspect-ratio: 1; }
+  figure .frame img { max-width: 100%; max-height: 100%; display: block; }
+  figcaption { margin-top: 6px; font-size: .85rem; color: var(--muted); }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  .num { font-family: var(--mono); font-size: .8rem; }
+
+  .qrbox { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--rule); }
+  .qrbox > p { margin: 0 0 10px; color: var(--muted); font-size: .9rem; max-width: 62ch; }
+  .warn { color: var(--accent) !important; }
+  #qrimg { width: 100%; max-width: 320px; height: auto; image-rendering: pixelated; background: #fff; border: 1px solid var(--rule); display: block; margin: 12px 0; }
+
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: .85rem; }
+
+  #viewer { display: none; position: fixed; inset: 0; background: #111; align-items: center; justify-content: center; }
+  #viewer img, #viewer canvas { max-width: 100vw; max-height: 100vh; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 8px 0 0; }
+
+  @media print {
+    :root { --paper: #fff; --ink: #000; --muted: #333; --rule: #999; }
+    @page { size: A4; margin: 10mm; }
+    header, .settings, #empty, #msg, .compare, .qrbox > p, .no-print, footer { display: none !important; }
+    main { padding: 0; max-width: none; }
+    .layout { display: block; }
+    .qrbox { border: 0; margin: 0; padding: 0; }
+    #qrimg { max-width: none; width: 100%; border: 0; margin: 0; }
+  }
 </style>
 </head>
 <body>
 <main id="gen">
-  <h1>Image to QR</h1>
-  <p class="muted">Everything happens in your browser. Your image is never uploaded; it lives inside the QR code.</p>
-  <div class="card">
-    <label for="file">Choose image</label>
-    <input id="file" type="file" accept="image/*">
-    <label for="target">QR density</label>
-    <select id="target">
-      <option value="1100">Easy to scan (smaller image)</option>
-      <option value="1800" selected>Balanced</option>
-      <option value="2900">Max detail (dense QR)</option>
-    </select>
-    <button id="go">Make QR</button>
+  <header>
+    <h1>Image to QR</h1>
+    <p>Pick an image and get one QR code that contains the picture itself. Scan it and the image opens. Nothing is uploaded anywhere.</p>
+  </header>
+
+  <div class="layout">
+    <section class="settings" aria-label="Settings">
+      <h2>1. Image</h2>
+      <input id="file" type="file" accept="image/*">
+      <label id="drop" for="file"><strong>Choose a file</strong> or drop one here</label>
+
+      <fieldset>
+        <h2 style="margin-top:0">2. Mode</h2>
+        <label><input type="radio" name="mode" value="compact" checked> Compact<small>Any image. It is shrunk to fit, so quality is lost.</small></label>
+        <label><input type="radio" name="mode" value="focus"> Maximum<small>The whole photo in one QR. A circle in the middle keeps the most detail, the edges are blurry.</small></label>
+        <label><input type="radio" name="mode" value="original"> Original, no loss<small>The exact file. Only works if the file is tiny (about 2 KB or less).</small></label>
+      </fieldset>
+
+      <fieldset id="focusOpts" hidden>
+        <h2 style="margin-top:0">Sharp center</h2>
+        <label style="border:0;cursor:default">Diameter: <b id="diamVal">40%</b> of the shorter side
+          <input id="diam" type="range" min="20" max="70" step="5" value="40" aria-label="Diameter of the sharp center">
+          <small style="margin-left:0">Kept between 20% and 70%. Too small and there is no focus. Too big and the edges get nothing.</small>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <h2 style="margin-top:0">3. QR density</h2>
+        <label><input type="radio" name="dens" value="1100"> Easy to scan<small>Simpler QR, smaller image. Best for print.</small></label>
+        <label><input type="radio" name="dens" value="1800" checked> Balanced<small>Good default.</small></label>
+        <label><input type="radio" name="dens" value="2900"> Dense<small>Biggest image. Dense QR, needs a large print.</small></label>
+      </fieldset>
+
+      <button id="go" type="button">Make QR</button>
+    </section>
+
+    <section aria-live="polite">
+      <p id="msg" role="status" hidden></p>
+
+      <div id="empty" class="empty">
+        <strong>How it works</strong>
+        <ol>
+          <li>A QR code holds about 2.9 KB, so the image is shrunk to fit.</li>
+          <li>The QR holds a link to this page plus the image data.</li>
+          <li>Any phone camera opens the link and shows the image.</li>
+        </ol>
+      </div>
+
+      <div id="result" hidden>
+        <div class="compare">
+          <figure>
+            <div class="frame"><img id="orig" alt="Original image"></div>
+            <figcaption><b>Original</b><br><span class="num" id="origInfo"></span></figcaption>
+          </figure>
+          <figure>
+            <div class="frame"><img id="small" alt="Image as stored in the QR"></div>
+            <figcaption><b>Inside the QR</b><br><span class="num" id="smallInfo"></span></figcaption>
+          </figure>
+        </div>
+
+        <div class="qrbox">
+          <p id="qrinfo" class="num"></p>
+          <p id="qrwarn" class="warn" hidden></p>
+          <img id="qrimg" alt="QR code">
+          <button id="dl" class="plain no-print" type="button">Download PNG</button>
+          <button id="print" class="plain no-print" type="button">Print (A4)</button>
+        </div>
+      </div>
+    </section>
   </div>
-  <div class="card" id="out" hidden>
-    <img id="qrimg" alt="QR code">
-    <p class="muted" id="info"></p>
-    <button id="dl">Download PNG</button>
-  </div>
-  <p class="muted">Scan with the normal phone camera and tap the link.</p>
+
+  <footer>Runs entirely in your browser. The image lives inside the QR code, not on a server.</footer>
 </main>
-<div id="viewer"><img id="vimg" alt=""></div>
+<div id="viewer"><img id="vimg" alt=""><canvas id="vcanvas" hidden></canvas></div>
 
 <script>
 (function () {
+  var FORMATS = /^(webp|jpeg|png|gif)$/;
+
   // ---- Viewer mode: link looks like  page#jpeg;<base64> ----
-  var h = location.hash.slice(1), i = h.indexOf(";"), fmt = h.slice(0, i);
-  if (i > 0 && /^(webp|jpeg|png)$/.test(fmt)) {
+  var h = location.hash.slice(1), parts = h.split(";");
+  // Maximum mode link: page#c;<fmt>;<center %>;<base64 whole photo>;<base64 sharp center>
+  if (parts.length === 5 && parts[0] === "c" && FORMATS.test(parts[1])) {
     document.getElementById("gen").style.display = "none";
-    var v = document.getElementById("viewer");
-    v.style.display = "flex";
-    document.getElementById("vimg").src = "data:image/" + fmt + ";base64," + h.slice(i + 1);
+    document.getElementById("viewer").style.display = "flex";
+    document.getElementById("vimg").hidden = true;
+    var cv = document.getElementById("vcanvas");
+    cv.hidden = false;
+    compose(cv, parts[1], parseInt(parts[2], 10), parts[3], parts[4]);
+    return;
+  }
+  if (parts.length === 2 && FORMATS.test(parts[0])) {
+    document.getElementById("gen").style.display = "none";
+    document.getElementById("viewer").style.display = "flex";
+    document.getElementById("vimg").src = "data:image/" + parts[0] + ";base64," + parts[1];
     return;
   }
 
   // ---- Generator mode ----
   var $ = function (id) { return document.getElementById(id); };
   var base = location.origin + location.pathname;
-  var lastURL = null;
+  var current = null, qrURL = null;
+
+  function kb(n) { return n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB"; }
+  function checked(name) { return document.querySelector("input[name=" + name + "]:checked").value; }
+  function say(text) { $("msg").textContent = text || ""; $("msg").hidden = !text; }
 
   function makeQR(text) {
     var qr = qrcode(0, "L");
@@ -74,25 +218,30 @@
     return new Promise(function (res, rej) {
       var img = new Image();
       img.onload = function () { res(img); };
-      img.onerror = function () { rej(new Error("Cannot read image")); };
+      img.onerror = function () { rej(new Error("Cannot read this image.")); };
       img.src = URL.createObjectURL(file);
     });
   }
 
+  // Use WebP when the browser can encode it (smaller, so better quality per byte); else JPEG.
+  var useWebp = document.createElement("canvas").toDataURL("image/webp").indexOf("data:image/webp") === 0;
+  var FMT = useWebp ? "webp" : "jpeg";
+
+  // Compact: shrink + compress until the link fits in one QR.
   function fit(img, limit) {
     var c = document.createElement("canvas"), ctx = c.getContext("2d");
-    var qs = [0.7, 0.5, 0.35, 0.25, 0.15];
-    for (var side = 256; side >= 16; side -= 8) {
+    var qs = [0.8, 0.65, 0.5, 0.35, 0.25, 0.15];
+    for (var side = 320; side >= 16; side -= 8) {
       var s = Math.min(1, side / Math.max(img.width, img.height));
       c.width = Math.max(1, Math.round(img.width * s));
       c.height = Math.max(1, Math.round(img.height * s));
       ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(img, 0, 0, c.width, c.height);
       for (var k = 0; k < qs.length; k++) {
-        var data = c.toDataURL("image/jpeg", qs[k]).split(",")[1];
-        var payload = base + "#jpeg;" + data;
+        var url = c.toDataURL("image/" + FMT, qs[k]);
+        var payload = base + "#" + FMT + ";" + url.split(",")[1];
         if (payload.length <= limit) {
-          try { return { qr: makeQR(payload), w: c.width, h: c.height, len: payload.length }; }
+          try { return { qr: makeQR(payload), preview: url, w: c.width, h: c.height, len: payload.length, q: qs[k] }; }
           catch (e) { /* too big for QR, keep shrinking */ }
         }
       }
@@ -100,24 +249,191 @@
     return null;
   }
 
-  $("go").onclick = function () {
-    var f = $("file").files[0];
-    if (!f) { alert("Choose an image first."); return; }
-    loadImage(f).then(function (img) {
-      var r = fit(img, parseInt($("target").value, 10));
-      if (!r) { alert("Image cannot fit in a QR code."); return; }
-      lastURL = r.qr.createDataURL(8, 4);
-      $("qrimg").src = lastURL;
-      $("info").textContent = r.w + "x" + r.h + " px image, " + r.len + " bytes, QR version " + r.qr.getModuleCount();
-      $("out").hidden = false;
-    }).catch(function (e) { alert(e.message); });
-  };
+  function bytesToB64(buf) {
+    var u = new Uint8Array(buf), s = "";
+    for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
 
-  $("dl").onclick = function () {
-    if (!lastURL) return;
-    var a = document.createElement("a");
-    a.href = lastURL; a.download = "qr.png"; a.click();
+  function formatOf(type) {
+    return { "image/jpeg": "jpeg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" }[type] || null;
+  }
+
+  function show(qr, smallUrl, smallInfo, info) {
+    $("orig").src = current.url;
+    $("origInfo").textContent = current.img.width + " x " + current.img.height + " px, " + kb(current.file.size);
+    $("small").src = smallUrl;
+    $("smallInfo").textContent = smallInfo;
+    qrURL = qr.createDataURL(8, 4);
+    $("qrimg").src = qrURL;
+    var mods = qr.getModuleCount(), ver = (mods - 17) / 4;
+    $("qrinfo").textContent = "QR version " + ver + ", " + info;
+    $("qrwarn").hidden = ver < 25;
+    $("qrwarn").textContent = ver < 25 ? "This QR is dense. Print it large or show it full screen. Pick \"Easy to scan\" if it will not read." : "";
+    $("empty").hidden = true;
+    $("result").hidden = false;
+  }
+
+  // Draw the blurry whole photo, then the sharp circle on top with a soft edge.
+  function compose(canvas, fmt, pct, a, b, done) {
+    var i1 = new Image(), i2 = new Image(), n = 0;
+    function ready() {
+      if (++n < 2) return;
+      var ar = i1.width / i1.height, L = 1024;
+      var W = ar >= 1 ? L : Math.round(L * ar), H = ar >= 1 ? Math.round(L / ar) : L;
+      canvas.width = W; canvas.height = H;
+      var ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(i1, 0, 0, W, H);
+      var D = Math.round(pct / 100 * Math.min(W, H));
+      var m = document.createElement("canvas"); m.width = m.height = D;
+      var mc = m.getContext("2d");
+      mc.imageSmoothingQuality = "high";
+      mc.drawImage(i2, 0, 0, D, D);
+      mc.globalCompositeOperation = "destination-in";
+      var g = mc.createRadialGradient(D / 2, D / 2, D * 0.4, D / 2, D / 2, D / 2);
+      g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
+      mc.fillStyle = g; mc.fillRect(0, 0, D, D);
+      ctx.drawImage(m, Math.round((W - D) / 2), Math.round((H - D) / 2));
+      if (done) done(false);
+    }
+    i1.onload = i2.onload = ready;
+    i1.onerror = i2.onerror = function () { if (done) done(true); };
+    i1.src = "data:image/" + fmt + ";base64," + a;
+    i2.src = "data:image/" + fmt + ";base64," + b;
+  }
+
+  function encode(c, q) { return c.toDataURL("image/" + FMT, q).split(",")[1]; }
+  function range(from, to, step) { var a = []; for (var v = from; v >= to; v -= step) a.push(v); return a; }
+
+  // Largest size, then best quality, whose base64 fits the byte budget.
+  function pick(draw, sides, qs, budget) {
+    var c = document.createElement("canvas");
+    for (var i = 0; i < sides.length; i++) {
+      draw(c, sides[i]);
+      for (var k = 0; k < qs.length; k++) {
+        var b = encode(c, qs[k]);
+        if (b.length <= budget) return { b64: b, q: qs[k], w: c.width, h: c.height };
+      }
+    }
+    return null;
+  }
+
+  function generateFocus(limit) {
+    var img = current.img;
+    var pct = Math.max(20, Math.min(70, parseInt($("diam").value, 10) || 40));
+    var avail = limit - (base + "#c;" + FMT + ";" + pct + ";;").length;
+    var long = Math.max(img.width, img.height);
+
+    // 1) the whole photo, as small as it needs to be (about 30% of the bytes)
+    var whole = pick(function (c, side) {
+      var s = Math.min(1, side / long);
+      c.width = Math.max(1, Math.round(img.width * s));
+      c.height = Math.max(1, Math.round(img.height * s));
+      var x = c.getContext("2d");
+      x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(img, 0, 0, c.width, c.height);
+    }, range(128, 16, 8), [0.5, 0.35, 0.2], Math.floor(avail * 0.3));
+    if (!whole) { say("This image cannot fit in a QR code."); return; }
+
+    // 2) the sharp circle in the middle gets everything that is left
+    var dSrc = Math.max(1, Math.round(pct / 100 * Math.min(img.width, img.height)));
+    var sx = (img.width - dSrc) / 2, sy = (img.height - dSrc) / 2;
+    var center = pick(function (c, side) {
+      var s = Math.max(8, Math.min(side, dSrc));
+      c.width = c.height = s;
+      var x = c.getContext("2d");
+      x.fillStyle = "#808080"; x.fillRect(0, 0, s, s);   // flat corners cost almost nothing
+      x.save(); x.beginPath(); x.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2); x.clip();
+      x.drawImage(img, sx, sy, dSrc, dSrc, 0, 0, s, s);
+      x.restore();
+    }, range(320, 24, 8), [0.75, 0.6, 0.45, 0.3], avail - whole.b64.length);
+    if (!center) { say("Not enough room for the sharp center. Use a smaller diameter or the Dense setting."); return; }
+
+    var payload = base + "#c;" + FMT + ";" + pct + ";" + whole.b64 + ";" + center.b64, qr;
+    try { qr = makeQR(payload); } catch (e) { say("This image cannot fit in a QR code."); return; }
+
+    var canvas = document.createElement("canvas");
+    compose(canvas, FMT, pct, whole.b64, center.b64, function (err) {
+      if (err) { say("Could not build the preview."); return; }
+      show(qr, canvas.toDataURL("image/png"),
+        "edges " + whole.w + " x " + whole.h + " px, sharp circle " + center.w + " px (" + pct + "%)",
+        kb(payload.length) + " of data");
+    });
+  }
+
+  function generateCompact(limit) {
+    var r = fit(current.img, limit);
+    if (!r) { say("This image cannot fit in a QR code."); return; }
+    show(r.qr, r.preview, r.w + " x " + r.h + " px, " + FMT.toUpperCase() + " quality " + Math.round(r.q * 100) + " (lossy)", kb(r.len) + " of data");
+  }
+
+  function generateOriginal(limit) {
+    var fmt = formatOf(current.file.type);
+    if (!fmt) { say("Original mode supports JPEG, PNG, WebP and GIF files. Use Compact instead."); return; }
+    current.file.arrayBuffer().then(function (buf) {
+      var payload = base + "#" + fmt + ";" + bytesToB64(buf), qr = null;
+      if (payload.length <= limit) { try { qr = makeQR(payload); } catch (e) {} }
+      if (!qr) {
+        $("result").hidden = true; $("empty").hidden = false;
+        say("This file is " + kb(current.file.size) + ". One QR code holds about 2 KB, so the original does not fit. Use Compact, which shrinks the image to fit.");
+        return;
+      }
+      show(qr, current.url, "identical to the original, nothing lost", kb(payload.length) + " of data");
+    }).catch(function (e) { say(e.message); });
+  }
+
+  function generate() {
+    if (!current) return;
+    say("");
+    var limit = parseInt(checked("dens"), 10);
+    var mode = checked("mode");
+    if (mode === "original") generateOriginal(limit);
+    else if (mode === "focus") generateFocus(limit);
+    else generateCompact(limit);
+  }
+
+  function setFile(f) {
+    if (!f || !/^image\//.test(f.type)) { say("Please choose an image file."); return; }
+    loadImage(f).then(function (img) {
+      current = { file: f, img: img, url: img.src };
+      var name = document.createElement("strong");
+      name.textContent = f.name;
+      $("drop").textContent = "";
+      $("drop").appendChild(name);
+      $("drop").appendChild(document.createElement("br"));
+      $("drop").appendChild(document.createTextNode("click to change"));
+      generate();
+    }).catch(function (e) { say(e.message); });
+  }
+
+  $("file").onchange = function () { setFile($("file").files[0]); };
+  $("go").onclick = function () {
+    if (!current) { say("Choose an image first."); return; }
+    generate();
   };
+  function syncOpts() { $("focusOpts").hidden = checked("mode") !== "focus"; }
+  Array.prototype.forEach.call(document.querySelectorAll("input[name=dens], input[name=mode]"), function (r) {
+    r.onchange = function () { syncOpts(); generate(); };
+  });
+  $("diam").oninput = function () { $("diamVal").textContent = this.value + "%"; };
+  $("diam").onchange = generate;
+  syncOpts();
+  $("dl").onclick = function () {
+    if (!qrURL) return;
+    var a = document.createElement("a");
+    a.href = qrURL; a.download = "qr.png"; a.click();
+  };
+  $("print").onclick = function () { window.print(); };
+
+  var drop = $("drop");
+  ["dragenter", "dragover"].forEach(function (t) {
+    drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (t) {
+    drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) { setFile(e.dataTransfer.files[0]); });
 })();
 </script>
 </body>
